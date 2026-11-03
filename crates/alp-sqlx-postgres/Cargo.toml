@@ -9,7 +9,7 @@ name = "sqlx"
 path = "src/lib.rs"
 
 [dependencies]
-sqlx-core = { version = "=0.8.6", default-features = false, features = [
+sqlx-core = { version = "=0.9.0", default-features = false, features = [
     "_rt-tokio",
     "_tls-rustls-ring-webpki",
     "chrono",
