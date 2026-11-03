@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-sha2 = "0.10"
+sha2 = "0.11"
 alp-core = { path = "../alp-core" }
 anyhow = "1"
 axum = "0.8"
