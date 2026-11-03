@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: alp
+      POSTGRES_PASSWORD: ${ALP_POSTGRES_PASSWORD:?run ./bootstrap.sh or set ALP_POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: alp
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - alp_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alp -d alp"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: crates/alp-server/Dockerfile
+    environment:
+      ALP_DATABASE_URL: postgres://alp:${ALP_POSTGRES_PASSWORD:?run ./bootstrap.sh or set ALP_POSTGRES_PASSWORD in .env}@postgres:5432/alp
+      ALP_BIND: 0.0.0.0:8080
+      ALP_TRUST_CONTAINER_BOUNDARY: "1"
+      ALP_SECURITY_MODE: ${ALP_SECURITY_MODE:-local}
+      ALP_API_TOKEN: ${ALP_API_TOKEN:-}
+      ALP_MODEL_POLICY: ${ALP_MODEL_POLICY:-local_only}
+      ALP_MODEL_PROVIDER: ${ALP_MODEL_PROVIDER:-ollama}
+      ALP_MODEL_NAME: ${ALP_MODEL_NAME:-qwen3.5:4b}
+      ALP_MODEL_BASE_URL: ${ALP_MODEL_BASE_URL:-http://host.docker.internal:11434}
+      ALP_MODEL_API_KEY: ${ALP_MODEL_API_KEY:-}
+      ALP_WEB_ALLOWLIST: ${ALP_WEB_ALLOWLIST:-example.com,www.rfc-editor.org,rfc-editor.org}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "127.0.0.1:8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Optional local cloud-API emulation. These containers receive the Docker
+  # socket and therefore have a highly privileged host capability.
+  floci-aws:
+    image: floci/floci:2.4.0
+    profiles: ["cloud-emulation"]
+    ports:
+      - "127.0.0.1:4566:4566"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  floci-azure:
+    image: floci/floci-az:0.16.0
+    profiles: ["cloud-emulation"]
+    ports:
+      - "127.0.0.1:4577:4577"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  beam-runtime:
+    build:
+      context: ./runtimes/alp-beam
+    environment:
+      ALP_BEAM_PORT: 8090
+      ALP_CONTROL_PLANE_URL: http://api:8080
+      ALP_BEAM_AGENTS: ${ALP_BEAM_AGENTS:-}
+      ALP_API_TOKEN: ${ALP_API_TOKEN:-}
+    ports:
+      - "127.0.0.1:${ALP_BEAM_HOST_PORT:-8090}:8090"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  alp_pg:

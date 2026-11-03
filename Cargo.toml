@@ -1,0 +1,5 @@
+[workspace]
+members = ["crates/alp-core", "crates/alp-server", "crates/alp-cli", "crates/alp-studio",
+    "crates/alp-sqlx-postgres",
+]
+resolver = "2"

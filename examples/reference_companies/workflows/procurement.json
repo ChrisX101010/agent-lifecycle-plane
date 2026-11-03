@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    {"key":"request","kind":"task","role":"planner","checklist":["need_defined","budget_context_checked"],"input":{"operation":"purchase_request"},"sla_seconds":120},
+    {"key":"source","kind":"task","role":"researcher","depends_on":["request"],"checklist":["supplier_options_reviewed","quotes_compared"],"input":{"operation":"supplier_sourcing"},"sla_seconds":120},
+    {"key":"select","kind":"task","role":"worker","depends_on":["source"],"checklist":["supplier_selected","purchase_package_prepared"],"input":{"operation":"supplier_selection"},"sla_seconds":120},
+    {"key":"supervise","kind":"supervisor","role":"verifier","depends_on":["select"],"checklist":["policy_checked","definition_of_done_checked"],"input":{"operation":"procurement_manager_review","target_score":97}}
+  ]
+}

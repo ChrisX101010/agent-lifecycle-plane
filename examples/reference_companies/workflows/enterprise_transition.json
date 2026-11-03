@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    {"key":"discover","kind":"task","role":"planner","checklist":["scope_captured","systems_identified"],"input":{"operation":"transition_discovery"},"sla_seconds":120},
+    {"key":"map_sales","kind":"task","role":"researcher","depends_on":["discover"],"checklist":["sales_mapping_built"],"input":{"operation":"sales_mapping"},"sla_seconds":120},
+    {"key":"map_finance","kind":"task","role":"researcher","depends_on":["discover"],"checklist":["finance_mapping_built"],"input":{"operation":"finance_mapping"},"sla_seconds":120},
+    {"key":"validate","kind":"task","role":"worker","depends_on":["map_sales","map_finance"],"checklist":["mapping_validated","sandbox_ready"],"input":{"operation":"transition_validation"},"sla_seconds":120},
+    {"key":"supervise","kind":"supervisor","role":"verifier","depends_on":["validate"],"checklist":["equivalence_ready","cutover_not_authorized"],"input":{"operation":"transition_manager_review","target_score":98}}
+  ]
+}

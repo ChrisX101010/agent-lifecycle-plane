@@ -1,0 +1,12 @@
+target/
+.git/
+.alp-backup/
+node_modules/
+web/node_modules/
+*.log
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/

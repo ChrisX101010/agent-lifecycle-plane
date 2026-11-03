@@ -1,0 +1,24 @@
+[package]
+name = "alp-sqlx-postgres"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "sqlx"
+path = "src/lib.rs"
+
+[dependencies]
+sqlx-core = { version = "=0.8.6", default-features = false, features = [
+    "_rt-tokio",
+    "_tls-rustls-ring-webpki",
+    "chrono",
+    "uuid",
+    "json"
+] }
+
+sqlx-postgres = { version = "=0.8.6", default-features = false, features = [
+    "chrono",
+    "uuid",
+    "json"
+] }

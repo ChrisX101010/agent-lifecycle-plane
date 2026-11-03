@@ -1,0 +1,26 @@
+.env
+.env.*
+!.env.example
+target/
+.alp-backup/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.log
+.DS_Store
+
+# --- ALP local/private state ---
+_build/
+deps/
+node_modules/
+pgdata/
+data/
+
+# Local patch backups
+*.pre-alp*
+__pycache__/
+*.py[cod]
+.pytest_cache/

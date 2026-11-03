@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    {"key":"intake","kind":"task","role":"planner","checklist":["request_classified","sla_selected"],"input":{"operation":"support_intake"},"sla_seconds":120},
+    {"key":"diagnose","kind":"task","role":"researcher","depends_on":["intake"],"checklist":["symptoms_reviewed","evidence_collected"],"input":{"operation":"support_diagnosis"},"sla_seconds":120},
+    {"key":"resolve","kind":"task","role":"worker","depends_on":["diagnose"],"checklist":["resolution_prepared","customer_safe"],"input":{"operation":"support_resolution"},"sla_seconds":120},
+    {"key":"supervise","kind":"supervisor","role":"verifier","depends_on":["resolve"],"checklist":["evidence_checked","definition_of_done_checked"],"input":{"operation":"support_manager_review","target_score":96}}
+  ]
+}

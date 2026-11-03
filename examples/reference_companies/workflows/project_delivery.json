@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    {"key":"scope","kind":"task","role":"planner","checklist":["scope_defined","budget_reviewed","timeline_defined"],"input":{"operation":"project_scope"},"sla_seconds":120},
+    {"key":"requirements","kind":"task","role":"researcher","depends_on":["scope"],"checklist":["requirements_checked"],"input":{"operation":"requirements_review"},"sla_seconds":120},
+    {"key":"risk","kind":"task","role":"researcher","depends_on":["scope"],"checklist":["risks_checked"],"input":{"operation":"risk_review"},"sla_seconds":120},
+    {"key":"delivery","kind":"task","role":"worker","depends_on":["requirements","risk"],"checklist":["deliverable_built","self_tested"],"input":{"operation":"project_delivery"},"sla_seconds":120},
+    {"key":"supervise","kind":"supervisor","role":"verifier","depends_on":["delivery"],"checklist":["milestones_checked","definition_of_done_checked"],"input":{"operation":"project_manager_review","target_score":96}}
+  ]
+}

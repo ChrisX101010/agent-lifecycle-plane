@@ -1,0 +1,16 @@
+[package]
+name = "alp-cli"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "alpctl"
+path = "src/main.rs"
+
+[dependencies]
+alp-core = { path = "../alp-core" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = "1"
+serde_yaml = { package = "noyalib-serde-yaml", version = "=0.0.58" }
