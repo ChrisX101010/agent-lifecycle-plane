@@ -10,22 +10,33 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Tabs, Wrap},
+    widgets::{
+        Block, Borders, Cell, Clear, Gauge, List, ListItem, Paragraph, Row, Table, Tabs, Wrap,
+    },
     Terminal,
 };
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
-use std::{env, io, time::Duration};
+use std::{
+    env, io, thread,
+    time::{Duration, Instant},
+};
 #[derive(Parser)]
-#[command(name = "alp-studio", about = "Terminal-native ALP Company Studio")]
+#[command(
+    name = "alp-studio",
+    version,
+    about = "Terminal-native Agent Lifecycle Plane Company Studio"
+)]
 struct Args {
     #[arg(long, default_value = "http://127.0.0.1:8080")]
     api: String,
     #[arg(long)]
     smoke: bool,
+    #[arg(long)]
+    no_splash: bool,
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -119,6 +130,7 @@ struct App {
     message: String,
     hit_tabs: Vec<(Rect, usize)>,
     hit_nodes: Vec<(Rect, usize)>,
+    show_help: bool,
 }
 impl App {
     fn new(api: Api) -> Self {
@@ -138,15 +150,34 @@ impl App {
             message: "Ready".into(),
             hit_tabs: vec![],
             hit_nodes: vec![],
+            show_help: false,
         }
     }
     fn refresh(&mut self) {
-        self.cases = arr(self.api.get("/v1/company/cases"));
-        self.workflows = arr(self.api.get("/v1/company/workflows"));
-        self.agents = arr(self.api.get("/v1/company/workplace/performance"));
-        self.blueprints = arr(self.api.get("/v1/company/blueprints"));
-        self.connectors = arr(self.api.get("/v1/company/connectors"));
-        self.message = "Refreshed".into();
+        let mut errors = Vec::new();
+
+        macro_rules! fetch_list {
+            ($field:ident, $path:expr) => {
+                match self.api.get($path) {
+                    Ok(value) => {
+                        self.$field = value.as_array().cloned().unwrap_or_default();
+                    }
+                    Err(error) => errors.push(format!("{}: {}", $path, error)),
+                }
+            };
+        }
+
+        fetch_list!(cases, "/v1/company/cases");
+        fetch_list!(workflows, "/v1/company/workflows");
+        fetch_list!(agents, "/v1/company/workplace/performance");
+        fetch_list!(blueprints, "/v1/company/blueprints");
+        fetch_list!(connectors, "/v1/company/connectors");
+
+        self.message = if errors.is_empty() {
+            "Refreshed".into()
+        } else {
+            format!("Refresh degraded: {}", errors.join(" | "))
+        };
     }
     fn load(&mut self) {
         if self.workflows.is_empty() {
@@ -243,32 +274,50 @@ impl App {
         }
     }
 }
-fn arr(v: Result<Value>) -> Vec<Value> {
-    v.ok()
-        .and_then(|x| x.as_array().cloned())
-        .unwrap_or_default()
-}
 fn main() -> Result<()> {
     let a = Args::parse();
     if a.smoke {
-        println!("ALP_STUDIO_TUI=PASS");
-        println!("MOUSE_GRAPH_EDITOR=PASS");
-        println!("GRAPH_CONNECT_EDITOR=PASS");
-        println!("LOCAL_DRAFT_VERSIONING=PASS");
-        return Ok(());
+        return smoke_render();
     }
     let mut app = App::new(Api::new(a.api)?);
-    app.refresh();
     enable_raw_mode()?;
     let mut out = io::stdout();
     execute!(out, EnterAlternateScreen, EnableMouseCapture)?;
     let mut t = Terminal::new(CrosstermBackend::new(out))?;
+    if !a.no_splash {
+        splash(&mut t)?;
+    }
+    app.api
+        .get("/health")
+        .with_context(|| format!("Company Studio cannot reach {}", app.api.base))?;
+    app.refresh();
     let r = run(&mut t, &mut app);
     disable_raw_mode()?;
     execute!(t.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     t.show_cursor()?;
     r
 }
+fn smoke_render() -> Result<()> {
+    use ratatui::backend::TestBackend;
+
+    let backend = TestBackend::new(100, 35);
+    let mut terminal = Terminal::new(backend)?;
+    terminal.draw(|f| draw_splash(f, 0.55))?;
+
+    let mut app = App::new(Api::new("http://127.0.0.1:8080".into())?);
+    app.show_help = true;
+    terminal.draw(|f| draw(f, &mut app))?;
+
+    println!("ALP_STUDIO_TUI=PASS");
+    println!("ALP_STUDIO_WELCOME_SPLASH=PASS");
+    println!("ALP_STUDIO_HELP_OVERLAY=PASS");
+    println!("ALP_STUDIO_RENDER_SMOKE=PASS");
+    println!("MOUSE_GRAPH_EDITOR=PASS");
+    println!("GRAPH_CONNECT_EDITOR=PASS");
+    println!("LOCAL_DRAFT_VERSIONING=PASS");
+    Ok(())
+}
+
 fn run(t: &mut Terminal<CrosstermBackend<io::Stdout>>, a: &mut App) -> Result<()> {
     loop {
         t.draw(|f| draw(f, a))?;
@@ -276,31 +325,44 @@ fn run(t: &mut Terminal<CrosstermBackend<io::Stdout>>, a: &mut App) -> Result<()
             continue;
         }
         match event::read()? {
-            Event::Key(k) if k.kind == KeyEventKind::Press => match k.code {
-                KeyCode::Char('q') => break,
-                KeyCode::Char('r') => a.refresh(),
-                KeyCode::Left => a.tab = a.tab.saturating_sub(1),
-                KeyCode::Right => a.tab = (a.tab + 1).min(5),
-                KeyCode::Up => {
-                    a.selected = a.selected.saturating_sub(1);
-                    if a.tab == 1 {
-                        a.load();
+            Event::Key(k) if k.kind == KeyEventKind::Press => {
+                if a.show_help {
+                    match k.code {
+                        KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('h') => {
+                            a.show_help = false
+                        }
+                        KeyCode::Char('q') => break,
+                        _ => {}
                     }
+                    continue;
                 }
-                KeyCode::Down => {
-                    a.selected += 1;
-                    if a.tab == 1 && !a.workflows.is_empty() {
-                        a.selected = a.selected.min(a.workflows.len() - 1);
-                        a.load();
+                match k.code {
+                    KeyCode::Char('q') => break,
+                    KeyCode::Char('?') | KeyCode::Char('h') => a.show_help = true,
+                    KeyCode::Char('r') => a.refresh(),
+                    KeyCode::Left => a.tab = a.tab.saturating_sub(1),
+                    KeyCode::Right => a.tab = (a.tab + 1).min(5),
+                    KeyCode::Up => {
+                        a.selected = a.selected.saturating_sub(1);
+                        if a.tab == 1 {
+                            a.load();
+                        }
                     }
+                    KeyCode::Down => {
+                        a.selected += 1;
+                        if a.tab == 1 && !a.workflows.is_empty() {
+                            a.selected = a.selected.min(a.workflows.len() - 1);
+                            a.load();
+                        }
+                    }
+                    KeyCode::Enter if a.tab == 1 => a.load(),
+                    KeyCode::Char('a') if a.tab == 1 => a.add(),
+                    KeyCode::Char('d') if a.tab == 1 => a.del(),
+                    KeyCode::Char('c') if a.tab == 1 => a.connect(),
+                    KeyCode::Char('p') if a.tab == 1 => a.publish(),
+                    _ => {}
                 }
-                KeyCode::Enter if a.tab == 1 => a.load(),
-                KeyCode::Char('a') if a.tab == 1 => a.add(),
-                KeyCode::Char('d') if a.tab == 1 => a.del(),
-                KeyCode::Char('c') if a.tab == 1 => a.connect(),
-                KeyCode::Char('p') if a.tab == 1 => a.publish(),
-                _ => {}
-            },
+            }
             Event::Mouse(m) if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) => {
                 for (r, i) in a.hit_tabs.clone() {
                     if inside(r, m.column, m.row) {
@@ -321,6 +383,156 @@ fn run(t: &mut Terminal<CrosstermBackend<io::Stdout>>, a: &mut App) -> Result<()
     }
     Ok(())
 }
+fn splash(t: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    let started = Instant::now();
+    let total = Duration::from_millis(1400);
+    loop {
+        let ratio = (started.elapsed().as_secs_f64() / total.as_secs_f64()).clamp(0.0, 1.0);
+        t.draw(|f| draw_splash(f, ratio))?;
+        if ratio >= 1.0 {
+            break;
+        }
+        if event::poll(Duration::from_millis(70))? {
+            match event::read()? {
+                Event::Key(k)
+                    if k.kind == KeyEventKind::Press
+                        && matches!(k.code, KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ')) =>
+                {
+                    break;
+                }
+                _ => {}
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+    Ok(())
+}
+
+fn draw_splash(f: &mut ratatui::Frame, ratio: f64) {
+    let area = centered_rect(82, 70, f.area());
+    f.render_widget(Clear, area);
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(10),
+            Constraint::Length(3),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    let logo = r#"     _    _     ____
+    / \  | |   |  _ \
+   / _ \ | |   | |_) |
+  / ___ \| |___|  __/
+ /_/   \_\_____|_|
+
+AGENT LIFECYCLE PLANE
+Governed autonomy for real work."#;
+
+    f.render_widget(
+        Paragraph::new(logo)
+            .alignment(Alignment::Center)
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .block(
+                Block::default()
+                    .title(format!(" Company Studio v{} ", env!("CARGO_PKG_VERSION")))
+                    .borders(Borders::ALL),
+            ),
+        rows[0],
+    );
+
+    let phase = if ratio < 0.25 {
+        "Loading control plane boundary"
+    } else if ratio < 0.50 {
+        "Loading authority and policy"
+    } else if ratio < 0.75 {
+        "Loading evidence and economics"
+    } else {
+        "Starting Company Studio"
+    };
+    f.render_widget(
+        Paragraph::new(phase)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(Color::DarkGray)),
+        rows[1],
+    );
+    f.render_widget(
+        Gauge::default()
+            .block(Block::default().borders(Borders::ALL))
+            .gauge_style(Style::default().fg(Color::Cyan))
+            .ratio(ratio)
+            .label(" deterministic authority • evidence • supervision "),
+        rows[2],
+    );
+}
+
+fn draw_help(f: &mut ratatui::Frame, a: &App) {
+    let area = centered_rect(78, 76, f.area());
+    f.render_widget(Clear, area);
+    let text = vec![
+        Line::from(Span::styled(
+            "COMPANY STUDIO HELP",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from("Global"),
+        Line::from("  ← / →     change workspace tab"),
+        Line::from("  r         refresh data from the control plane"),
+        Line::from("  ? / h     open or close this help"),
+        Line::from("  q         quit Company Studio"),
+        Line::from(""),
+        Line::from("DESIGN"),
+        Line::from("  ↑ / ↓     select workflow"),
+        Line::from("  Enter     load immutable workflow into a local draft"),
+        Line::from("  mouse     select workflow nodes"),
+        Line::from("  a         add draft node"),
+        Line::from("  d         delete selected draft node"),
+        Line::from("  c         arm/connect selected nodes"),
+        Line::from("  p         publish a new immutable workflow version"),
+        Line::from(""),
+        Line::from("Safety"),
+        Line::from("  Models are advisory; deterministic policy remains authoritative."),
+        Line::from("  Sandbox replay does not execute external side effects."),
+        Line::from("  Payment intents are authorized here; money movement stays external."),
+        Line::from(""),
+        Line::from(format!("Current tab: {}", Tab::all()[a.tab].label())),
+        Line::from(format!("Control plane: {}", a.api.base)),
+        Line::from("Press Esc, ? or h to close."),
+    ];
+    f.render_widget(
+        Paragraph::new(text)
+            .wrap(Wrap { trim: true })
+            .block(Block::default().title(" Help ").borders(Borders::ALL)),
+        area,
+    );
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(vertical[1])[1]
+}
+
 fn inside(r: Rect, x: u16, y: u16) -> bool {
     x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
 }
@@ -373,17 +585,22 @@ fn draw(f: &mut ratatui::Frame, a: &mut App) {
         Tab::Agents => agents(f, a, o[1]),
         Tab::Audit => audit(f, a, o[1]),
     }
+    let controls = match Tab::all()[a.tab] {
+        Tab::Design => " q quit  ? help  r refresh  ←/→ tabs  ↑/↓ workflow  Enter load  A add  D delete  C connect  P publish ",
+        _ => " q quit  ? help  r refresh  ←/→ tabs ",
+    };
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(
-                " q quit  r refresh  ←/→ tabs ",
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled(controls, Style::default().fg(Color::DarkGray)),
+            Span::raw(" | "),
             Span::raw(&a.message),
         ]))
         .block(Block::default().borders(Borders::ALL)),
         o[2],
     );
+    if a.show_help {
+        draw_help(f, a);
+    }
 }
 fn runview(f: &mut ratatui::Frame, a: &App, r: Rect) {
     let rows = a

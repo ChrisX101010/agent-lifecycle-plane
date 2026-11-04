@@ -855,15 +855,16 @@ async fn append_event_tx(
     Ok(())
 }
 
-fn conflict_or_internal<E: std::fmt::Display>(e: E) -> (StatusCode, String) {
-    let s = e.to_string();
-    if s.contains("duplicate key value") || s.contains("unique constraint") {
-        (StatusCode::CONFLICT, s)
+fn conflict_or_internal<E: std::fmt::Display>(error: E) -> (StatusCode, String) {
+    let text = error.to_string();
+    if text.contains("duplicate key value") || text.contains("unique constraint") {
+        tracing::warn!(error = %error, "economic resource conflict");
+        (StatusCode::CONFLICT, "resource conflict".into())
     } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, s)
+        crate::security::internal_error(error)
     }
 }
 
-fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+fn internal<E: std::fmt::Display>(error: E) -> (StatusCode, String) {
+    crate::security::internal_error(error)
 }

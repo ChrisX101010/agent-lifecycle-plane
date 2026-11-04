@@ -20,16 +20,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Shell syntax
+        run: bash -n bootstrap.sh scripts/*.sh
       - name: Built-in secret hygiene
         run: python3 scripts/secret_scan.py
+      - name: Gitleaks source scan
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.29.1 dir /repo --redact --no-banner
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      - name: CLI onboarding smoke test
+        run: |
+          cargo run --locked -q -p alp-cli -- --help | grep -q 'FIRST RUN:'
+          cargo run --locked -q -p alp-cli -- guide | grep -q 'ALP_GUIDE=PASS'
       - name: Company Studio smoke test
-        run: cargo run --locked -q -p alp-studio -- --smoke
+        run: |
+          cargo run --locked -q -p alp-studio -- --smoke | tee /tmp/alp-studio-smoke
+          grep -q 'ALP_STUDIO_WELCOME_SPLASH=PASS' /tmp/alp-studio-smoke
+          grep -q 'ALP_STUDIO_HELP_OVERLAY=PASS' /tmp/alp-studio-smoke
+          grep -q 'ALP_STUDIO_RENDER_SMOKE=PASS' /tmp/alp-studio-smoke
       - name: RustSec audit
         run: |
           cargo install cargo-audit --version 0.22.2 --locked
@@ -38,5 +50,8 @@ jobs:
         env:
           ALP_POSTGRES_PASSWORD: ci-only-placeholder-not-a-secret
         run: docker compose config --quiet
-      - name: BEAM runtime builds
-        run: docker build -t alp-beam-ci runtimes/alp-beam
+      - name: BEAM runtime builds as non-root
+        run: |
+          docker build -t alp-beam-ci runtimes/alp-beam
+          uid="$(docker run --rm --entrypoint id alp-beam-ci -u)"
+          test "$uid" != "0"

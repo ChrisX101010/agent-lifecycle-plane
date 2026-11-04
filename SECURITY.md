@@ -16,6 +16,23 @@ Agent Lifecycle Plane v0.1 is a **local-first, single-tenant beta**. It is not a
 
 Do not publish ports `8080`, `8090`, `5432`, `4566`, or `4577` to an untrusted network.
 
+## Verified local-beta defenses
+
+The release gates verify the following properties on the actual local runtime and staged source tree:
+
+- API, PostgreSQL, and BEAM host ports are loopback-published by default.
+- Rust API and BEAM runtime processes execute as non-root users.
+- API and BEAM containers run with `no-new-privileges` and all Linux capabilities dropped.
+- token mode rejects missing/invalid bearer tokens and accepts the configured token.
+- request bodies over the 1 MiB limit are rejected with HTTP 413.
+- untrusted origins do not receive permissive CORS headers.
+- server-side internal failures are logged but generic HTTP 500 responses do not echo raw backend errors.
+- Company Studio surfaces protected-endpoint refresh failures instead of silently presenting empty data.
+- local-only model policy rejects remote model endpoints.
+- RustSec, built-in secret scanning, Gitleaks source/history scans, and staged-tree checks run before release.
+
+These checks harden the supported local-first boundary; they do not turn v0.1 into a public-internet or multi-tenant security product.
+
 ## Secrets
 
 - `.env` is local-only and ignored by Git.

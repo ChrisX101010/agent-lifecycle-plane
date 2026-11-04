@@ -397,6 +397,6 @@ fn routing_name(v: ModelRoutingStrategy) -> &'static str {
     }
 }
 
-fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+fn internal<E: std::fmt::Display>(error: E) -> (StatusCode, String) {
+    crate::security::internal_error(error)
 }

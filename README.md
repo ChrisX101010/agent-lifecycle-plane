@@ -62,7 +62,7 @@ The model is never the source of authority. Durable state, policy checks, leases
 
 See [`docs/architecture.md`](docs/architecture.md) for the detailed boundary model.
 
-## Quick start
+## First five minutes
 
 ### Prerequisites
 
@@ -72,29 +72,77 @@ See [`docs/architecture.md`](docs/architecture.md) for the detailed boundary mod
 - `curl`
 - optional: Ollama for local cognition
 
-### Start the local control plane
+Start the local control plane and let bootstrap generate a private database credential:
 
 ```bash
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` creates a private `.env` on first run and generates a random PostgreSQL password. It never prints that password.
-
-Check the machine and local provider setup:
+Check the machine, create a workspace, and inspect its architecture:
 
 ```bash
 cargo run -p alp-cli -- doctor --system
+cargo run -p alp-cli -- new my-company --template local
+cd my-company
+cargo run --manifest-path ../crates/alp-cli/Cargo.toml -- validate
+cargo run --manifest-path ../crates/alp-cli/Cargo.toml -- tree
+```
+
+For the guided path:
+
+```bash
+cargo run -p alp-cli -- guide
+```
+
+For a normal developer install from the cloned repository:
+
+```bash
+cargo install --path crates/alp-cli --locked
+cargo install --path crates/alp-studio --locked
+
+alpctl --help
+alpctl guide
+alpctl studio
 ```
 
 The CLI executable is named `alpctl` (the Cargo package remains `alp-cli`) to avoid colliding with unrelated tools that already use the short `alp` command.
 
-Launch the terminal Company Studio:
+By default, published host ports bind to `127.0.0.1`, security mode is local, and model policy is `local_only`.
+
+## CLI
+
+| Command | Purpose |
+| --- | --- |
+| `alpctl doctor --system` | inspect machine/runtime/model readiness |
+| `alpctl new NAME --template local` | create a governed workspace |
+| `alpctl validate` | validate `alp.yaml` and policy invariants |
+| `alpctl tree` | explain the workspace architecture |
+| `alpctl guide` | print the first-run guide and safety model |
+| `alpctl studio` | launch Company Studio |
+| `alpctl demo` | run all four end-to-end reference companies |
+| `alpctl check` | run the full release-candidate gate |
+| `alpctl check --public` | also validate the exact staged public tree |
+
+## Company Studio
+
+Company Studio is a real Ratatui terminal product surface, not a screenshot mock-up. It opens with an animated ASCII welcome screen and then connects to the live control plane.
+
+Tabs:
+
+- **RUN** — live cases and workflow state
+- **DESIGN** — workflow graph/draft editor with mouse support
+- **FINANCE** — case-scoped budgets and economics
+- **SANDBOX** — blueprints and integration fabric
+- **AGENTS** — workplace performance signals
+- **AUDIT** — enforced architectural invariants
+
+Global controls: `←/→` tabs, `r` refresh, `?` help, `q` quit. In DESIGN: `↑/↓` select workflow, `Enter` load, `a` add, `d` delete, `c` connect, `p` publish a new immutable version.
+
+Skip the intro when scripting:
 
 ```bash
-cargo run -p alp-studio
+alp-studio --no-splash
 ```
-
-By default, published host ports bind to `127.0.0.1`, security mode is local, and model policy is `local_only`.
 
 ## Reference companies
 
@@ -107,9 +155,11 @@ The same kernel is exercised against four materially different workflows:
 | Enterprise transition | blueprint export/import, canonical mappings, shadow replay, no side effects |
 | Project delivery | dates, participants, parallel work, budget, revenue, expense, margin |
 
-Run them with:
+Run them with either entrypoint:
 
 ```bash
+alpctl demo
+# or
 bash scripts/alp14_reference_companies_gate.sh
 ```
 
@@ -117,9 +167,11 @@ See [`docs/reference-companies.md`](docs/reference-companies.md).
 
 ## Release gates
 
-The product release candidate gate combines tests, Clippy, dependency audit, secret hygiene, security assertions, and the reference-company regression suite:
+The product release candidate gate combines tests, Clippy, dependency audit, secret hygiene, container privilege assertions, API security checks, and the reference-company regression suite:
 
 ```bash
+alpctl check
+# or
 bash scripts/alp17_release_candidate_gate.sh
 ```
 

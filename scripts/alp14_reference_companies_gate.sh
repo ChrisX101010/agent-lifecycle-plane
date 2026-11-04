@@ -77,9 +77,16 @@ SQL
 export ALP_BEAM_AGENTS="${PLANNER}|planner-01|planner;${RESEARCHER}|research-01|researcher;${WORKER}|worker-01|worker;${VERIFIER}|verifier-01|verifier"
 
 echo "=== START GOVERNED BEAM WORKFORCE ==="
-docker compose up -d --force-recreate beam-runtime
+docker compose up -d --build --force-recreate beam-runtime
 wait_http http://127.0.0.1:${ALP_BEAM_HOST_PORT:-8090}/health
 curl -fsS http://127.0.0.1:${ALP_BEAM_HOST_PORT:-8090}/health | python3 -m json.tool
+beam_uid="$(docker compose exec -T beam-runtime id -u | tr -d '\r')"
+[ "$beam_uid" != "0" ]
+beam_id="$(docker compose ps -q beam-runtime)"
+docker inspect "$beam_id" --format '{{json .HostConfig.SecurityOpt}}' | grep -q 'no-new-privileges'
+docker inspect "$beam_id" --format '{{json .HostConfig.CapDrop}}' | grep -q 'ALL'
+echo "BEAM_NON_ROOT_RUNTIME_ASSERTION=PASS"
+echo "BEAM_CONTAINER_PRIVILEGE_ASSERTION=PASS"
 
 export ALP_OWNER_ID="$OWNER"
 export ALP_PLANNER_ID="$PLANNER"

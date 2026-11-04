@@ -1528,8 +1528,8 @@ fn parse_json(text: &str) -> Value {
     serde_json::from_str(text).unwrap_or_else(|_| serde_json::json!({"raw": text}))
 }
 
-fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+fn internal<E: std::fmt::Display>(error: E) -> (StatusCode, String) {
+    crate::security::internal_error(error)
 }
 
 type ApiResult = Result<Json<Value>, (StatusCode, String)>;

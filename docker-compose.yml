@@ -16,6 +16,11 @@ services:
       retries: 20
 
   api:
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     build:
       context: .
       dockerfile: crates/alp-server/Dockerfile
@@ -59,6 +64,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   beam-runtime:
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     build:
       context: ./runtimes/alp-beam
     environment:

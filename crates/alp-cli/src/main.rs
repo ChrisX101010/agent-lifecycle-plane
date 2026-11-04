@@ -11,7 +11,23 @@ use std::{
 #[derive(Parser)]
 #[command(name = "alpctl")]
 #[command(version)]
-#[command(about = "Agent Lifecycle Plane")]
+#[command(about = "Agent Lifecycle Plane — governed autonomy for real work")]
+#[command(
+    long_about = "Agent Lifecycle Plane keeps authority, evidence, workflow state, supervision, and economics outside the model. Use alpctl to inspect the machine, create and validate governed workspaces, launch Company Studio, run the reference demo, and execute release checks.",
+    after_help = "FIRST RUN:
+  alpctl doctor --system
+  alpctl new my-company --template local
+  cd my-company
+  alpctl validate
+  alpctl tree
+  alpctl guide
+
+Inside the Agent Lifecycle Plane repository:
+  ./bootstrap.sh
+  alpctl studio
+  alpctl demo
+  alpctl check"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -19,31 +35,61 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create a governed ALP workspace from a built-in profile.
     New {
+        /// Project/workspace name.
         name: String,
 
+        /// Destination directory. Defaults to ./<name>.
         #[arg(long)]
         path: Option<PathBuf>,
 
+        /// Starting profile for runtime, services, security, and cost policy.
         #[arg(long, value_enum, default_value_t = Template::Local)]
         template: Template,
     },
 
+    /// Validate an alp.yaml manifest and its policy invariants.
     Validate {
         #[arg(long, default_value = "alp.yaml")]
         file: PathBuf,
     },
 
+    /// Explain the current manifest as a readable architecture tree.
     Tree {
         #[arg(long, default_value = "alp.yaml")]
         file: PathBuf,
     },
 
+    /// Check project health, local tools, hardware, and model runtime availability.
     Doctor {
         #[arg(long, default_value = "alp.yaml")]
         file: PathBuf,
+        /// Skip manifest checks and inspect only this machine/runtime.
         #[arg(long)]
         system: bool,
+    },
+
+    /// Print a concise first-run guide and safety model.
+    Guide,
+
+    /// Launch the terminal-native Company Studio.
+    Studio {
+        /// ALP control-plane base URL.
+        #[arg(long, default_value = "http://127.0.0.1:8080")]
+        api: String,
+        /// Skip the animated welcome screen.
+        #[arg(long)]
+        no_splash: bool,
+    },
+
+    /// Run the four end-to-end reference-company scenarios from the repository.
+    Demo,
+
+    /// Run the release-candidate gate; optionally include the exact staged public-tree gate.
+    Check {
+        #[arg(long)]
+        public: bool,
     },
 }
 
@@ -85,6 +131,16 @@ fn main() -> Result<()> {
         Commands::Tree { file } => tree(file),
 
         Commands::Doctor { file, system } => doctor(file, system),
+        Commands::Guide => guide(),
+        Commands::Studio { api, no_splash } => studio(api, no_splash),
+        Commands::Demo => run_repo_script("scripts/alp14_reference_companies_gate.sh"),
+        Commands::Check { public } => {
+            run_repo_script("scripts/alp17_release_candidate_gate.sh")?;
+            if public {
+                run_repo_script("scripts/public_release_gate.sh")?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -277,6 +333,91 @@ fn doctor(path: PathBuf, system_only: bool) -> Result<()> {
     println!("ALP_DOCTOR=PASS");
     Ok(())
 }
+fn guide() -> Result<()> {
+    println!("AGENT LIFECYCLE PLANE — FIRST RUN");
+    println!();
+    println!("1. Check this machine");
+    println!("   alpctl doctor --system");
+    println!();
+    println!("2. Create a governed workspace");
+    println!("   alpctl new my-company --template local");
+    println!("   cd my-company");
+    println!();
+    println!("3. Validate and inspect the manifest");
+    println!("   alpctl validate");
+    println!("   alpctl tree");
+    println!();
+    println!("4. From the Agent Lifecycle Plane repository, start the local control plane");
+    println!("   ./bootstrap.sh");
+    println!();
+    println!("5. Open Company Studio");
+    println!("   alpctl studio");
+    println!();
+    println!("6. Prove the kernel end-to-end");
+    println!("   alpctl demo");
+    println!("   alpctl check");
+    println!();
+    println!("Safety model:");
+    println!("  Models propose.");
+    println!("  Deterministic policy authorizes.");
+    println!("  Independent verification confirms outcomes.");
+    println!("  v0.1 is local-first and single-tenant; read SECURITY.md before changing network boundaries.");
+    println!();
+    println!("ALP_GUIDE=PASS");
+    Ok(())
+}
+
+fn studio(api: String, no_splash: bool) -> Result<()> {
+    let mut direct = Command::new("alp-studio");
+    direct.arg("--api").arg(&api);
+    if no_splash {
+        direct.arg("--no-splash");
+    }
+
+    match direct.status() {
+        Ok(status) => {
+            if status.success() {
+                return Ok(());
+            }
+            bail!("alp-studio exited with status {status}");
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+
+    let mut cargo = Command::new("cargo");
+    cargo
+        .args(["run", "-p", "alp-studio", "--", "--api"])
+        .arg(&api);
+    if no_splash {
+        cargo.arg("--no-splash");
+    }
+    let status = cargo
+        .status()
+        .context("alp-studio is not on PATH and the Cargo fallback could not be started")?;
+    if !status.success() {
+        bail!("Company Studio exited with status {status}");
+    }
+    Ok(())
+}
+
+fn run_repo_script(path: &str) -> Result<()> {
+    let script = Path::new(path);
+    if !script.exists() {
+        bail!(
+            "{path} was not found; run this command from the Agent Lifecycle Plane repository root"
+        );
+    }
+    let status = Command::new("bash")
+        .arg(script)
+        .status()
+        .with_context(|| format!("failed to start {path}"))?;
+    if !status.success() {
+        bail!("{path} failed with status {status}");
+    }
+    Ok(())
+}
+
 fn check_tool_status(name: &str) -> bool {
     let ok = Command::new(name).arg("--version").output().is_ok();
     println!("{:<20} {}", name, if ok { "PASS" } else { "NOT_INSTALLED" });

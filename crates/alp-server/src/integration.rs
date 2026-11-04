@@ -848,5 +848,5 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 fn internal(error: impl std::fmt::Display) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+    crate::security::internal_error(error)
 }

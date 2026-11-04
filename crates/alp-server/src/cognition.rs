@@ -511,7 +511,7 @@ fn sha256_hex(data: &[u8]) -> String {
 }
 
 fn internal<E: std::fmt::Display>(error: E) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+    crate::security::internal_error(error)
 }
 
 #[cfg(test)]

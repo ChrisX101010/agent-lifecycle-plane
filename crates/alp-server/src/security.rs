@@ -59,6 +59,14 @@ pub(crate) async fn enforce(req: Request, next: Next) -> Response {
     next.run(req).await
 }
 
+pub(crate) fn internal_error(error: impl std::fmt::Display) -> (StatusCode, String) {
+    tracing::error!(error = %error, "internal request failure");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "internal server error".into(),
+    )
+}
+
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
@@ -72,7 +80,8 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::constant_time_eq;
+    use super::{constant_time_eq, internal_error};
+    use axum::http::StatusCode;
     #[test]
     fn exact() {
         assert!(constant_time_eq(
@@ -83,5 +92,12 @@ mod tests {
             b"01234567890123456789012345678901",
             b"11234567890123456789012345678901"
         ));
+    }
+    #[test]
+    fn internal_errors_are_redacted() {
+        let (status, body) = internal_error("database://user:secret@host/db");
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body, "internal server error");
+        assert!(!body.contains("secret"));
     }
 }

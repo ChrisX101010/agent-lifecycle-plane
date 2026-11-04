@@ -14,6 +14,9 @@ required=(README.md SECURITY.md LICENSE CHANGELOG.md .env.example Cargo.toml Car
 for file in "${required[@]}"; do
     [ -f "$file" ] || { echo "FAIL: missing $file" >&2; exit 1; }
 done
+grep -q 'alpctl guide' README.md
+grep -q 'animated ASCII welcome screen' README.md
+grep -q 'Verified local-beta defenses' SECURITY.md
 echo "PUBLIC_DOCS_ASSERTION=PASS"
 
 if git ls-files | grep -E '(^|/)(\.alp-backup/|target/|_build/|deps/|node_modules/|.*\.pre-alp.*$|.*\.(pem|key|p12|pfx|jks)$)' >/dev/null; then

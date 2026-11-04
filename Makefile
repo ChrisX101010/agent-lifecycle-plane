@@ -1,10 +1,19 @@
-.PHONY: bootstrap dev test fmt lint check audit compose floci release-check public-check
+.PHONY: bootstrap dev guide studio demo test fmt lint check audit compose floci release-check public-check
 
 bootstrap:
 	./bootstrap.sh
 
 dev:
 	cargo run -p alp-server
+
+guide:
+	cargo run -p alp-cli -- guide
+
+studio:
+	cargo run -p alp-studio
+
+demo:
+	bash scripts/alp14_reference_companies_gate.sh
 
 test:
 	cargo test --workspace --locked
